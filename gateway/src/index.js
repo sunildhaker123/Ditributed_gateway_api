@@ -6,6 +6,7 @@ const checkServices = require("./utils/healthChecker");
 const developerController = require("./controllers/developer.controller");
 const protectedRouter = require("./routers/protected.router");
 const authMiddleware = require("./middleware/auth.middleware");
+const redis = require("./config/redis");
 setInterval(() => {
   checkServices();
 }, 10000);

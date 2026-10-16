@@ -1,14 +1,26 @@
-const pool = require("./src/config/db");
+// const pool = require("./src/config/db");
 
-async function testConnection() {
+// async function testConnection() {
+//   try {
+//     const result = await pool.query("SELECT current_database(), current_user");
+//     console.log(result.rows[0]);
+//   } catch (err) {
+//     console.error("Database connection failed:", err.message);
+//   } finally {
+//     await pool.end();
+//   }
+// }
+
+// testConnection();
+const { getRateLimits } = require("./src/services/rateLimit.service");
+
+async function test() {
   try {
-    const result = await pool.query("SELECT current_database(), current_user");
-    console.log(result.rows[0]);
+    const limits = await getRateLimits(1);
+    console.log(limits);
   } catch (err) {
-    console.error("Database connection failed:", err.message);
-  } finally {
-    await pool.end();
+    console.error(err.message);
   }
 }
 
-testConnection();
+test();
