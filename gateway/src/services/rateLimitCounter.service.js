@@ -1,11 +1,17 @@
 const client = require("../config/redis");
+
 async function incrementRequestCount(redisKey) {
   const count = await client.incr(redisKey);
+  if (count == 1) {
+    let ttl = getSecondsUntilNextMinute(new Date());
+    await client.expire(redisKey, ttl);
+  }
   return count;
 }
 function buildRateLimitKey(apiKeyId, windowType, windowStart) {
   return `ratelimit:api_key:${apiKeyId}:${windowType}:${windowStart}`;
 }
+
 const date = new Date();
 const windowStart =
   date.getFullYear() +
@@ -18,18 +24,22 @@ const windowStart =
   ":" +
   String(date.getMinutes()).padStart(2, "0");
 // (async function () {
-//   const result = await incrementRequestCount(
-//     buildRateLimitKey(1, "minute", windowStart),
-//   );
+//   const rateLimitKey = buildRateLimitKey(1, "minute", windowStart);
+//   const result = await incrementRequestCount(rateLimitKey);
 //   console.log(result);
+//   const time = await client.ttl(rateLimitKey);
+//   console.log(time);
 //   await client.quit();
 // })();
 function getSecondsUntilNextMinute(currentTime) {
   const seconds = currentTime.getSeconds();
   return 60 - seconds;
 }
-let a = getSecondsUntilNextMinute(new Date());
-console.log(a);
+async function getCurrentValuOfCounter(redisKey) {
+  return Number(await client.get(redisKey)) || 0;
+}
+// let a = getSecondsUntilNextMinute(date);
+// console.log(a);
 // (async function () {
 //   try {
 //     const redisKey = buildRateLimitKey(1, "minute", windowStart);
@@ -51,4 +61,5 @@ module.exports = {
   incrementRequestCount,
   buildRateLimitKey,
   getSecondsUntilNextMinute,
+  getCurrentValuOfCounter,
 };

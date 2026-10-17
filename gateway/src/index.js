@@ -6,6 +6,7 @@ const checkServices = require("./utils/healthChecker");
 const developerController = require("./controllers/developer.controller");
 const protectedRouter = require("./routers/protected.router");
 const authMiddleware = require("./middleware/auth.middleware");
+const { rateLimiter } = require("./middleware/rateLimiter.middleware");
 const redis = require("./config/redis");
 setInterval(() => {
   checkServices();
@@ -20,7 +21,7 @@ for (const [route, service] of services) {
     }),
   );
 }
-app.use("/protected", authMiddleware, protectedRouter);
+app.use("/protected", authMiddleware, rateLimiter, protectedRouter);
 
 app.post("/register", developerController);
 app.listen(4000, () => {
