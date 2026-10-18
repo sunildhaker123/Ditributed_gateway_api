@@ -1,54 +1,71 @@
 const {
-  incrementRequestCount,
   buildRateLimitKey,
+  checkAndIncrement,
   getSecondsUntilNextMinute,
-  getCurrentValuOfCounter,
+  getSecondsUntilNextDay,
 } = require("../services/rateLimitCounter.service");
 const { getRateLimits } = require("../services/rateLimit.service");
 
 const rateLimiter = async (req, res, next) => {
   const apiKeyRecord = req.apiKey;
   const planId = apiKeyRecord.plan_id;
+  const date = new Date();
   let limits;
   try {
     limits = await getRateLimits(planId);
-    const match = limits.find((limit) => limit.window_type === "MINUTE");
-    if (!match) {
+    const windows = limits.map((limit) => {
+      let windowStart, ttl;
+      if (limit.window_type === "MINUTE") {
+        windowStart =
+          date.getUTCFullYear() +
+          "-" +
+          String(date.getUTCMonth() + 1).padStart(2, "0") +
+          "-" +
+          String(date.getUTCDate()).padStart(2, "0") +
+          "T" +
+          String(date.getUTCHours()).padStart(2, "0") +
+          ":" +
+          String(date.getUTCMinutes()).padStart(2, "0");
+        ttl = getSecondsUntilNextMinute(date);
+      } else if (limit.window_type === "DAY") {
+        windowStart =
+          date.getUTCFullYear() +
+          "-" +
+          String(date.getUTCMonth() + 1).padStart(2, "0") +
+          "-" +
+          String(date.getUTCDate()).padStart(2, "0");
+        ttl = getSecondsUntilNextDay(date);
+      }
+
+      const redisKey = buildRateLimitKey(
+        req.apiKey.id,
+        limit.window_type,
+        windowStart,
+      );
+
+      return {
+        redisKey,
+        limit: limit.request_limit,
+        ttl,
+      };
+    });
+    if (windows.length === 0) {
       return res.status(503).json({
         error: "Service Unavailable",
         message: "Rate limits are not configured for this plan",
       });
     }
-    const maxRequestLimit = match.request_limit;
-    const date = new Date();
-    const windowStart =
-      date.getFullYear() +
-      "-" +
-      String(date.getMonth() + 1).padStart(2, "0") +
-      "-" +
-      String(date.getDate()).padStart(2, "0") +
-      "T" +
-      String(date.getHours()).padStart(2, "0") +
-      ":" +
-      String(date.getMinutes()).padStart(2, "0");
-    const redisKey = buildRateLimitKey(
-      req.apiKey.id,
-      match.window_type,
-      windowStart,
-    );
-    const currCountVal = await getCurrentValuOfCounter(redisKey);
-
-    if (currCountVal >= maxRequestLimit) {
+    const currCountVal = await checkAndIncrement(windows);
+    if (currCountVal === 0) {
       return res.status(429).json({
         error: "Too many requests",
         message: "Request limit reached",
       });
     }
-    await incrementRequestCount(redisKey);
     return next();
   } catch (err) {
     return next(err);
   }
 };
-(async function () {})();
+
 module.exports = { rateLimiter };

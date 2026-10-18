@@ -1,65 +1,66 @@
 const client = require("../config/redis");
+const FIXED_WINDOW_SCRIPT = `
+  local windowCount = #KEYS
 
-async function incrementRequestCount(redisKey) {
-  const count = await client.incr(redisKey);
-  if (count == 1) {
-    let ttl = getSecondsUntilNextMinute(new Date());
-    await client.expire(redisKey, ttl);
-  }
-  return count;
+-- Pass 1: Check every window before modifying anything.
+for i = 1, windowCount do
+   local count = tonumber(redis.call('GET', KEYS[i])) or 0
+    local limit = tonumber(ARGV[(i - 1) * 2 + 1])
+    local ttl = tonumber(ARGV[(i - 1) * 2 + 2])
+
+    if not limit or limit <= 0 then
+        return redis.error_reply('Invalid rate limit')
+    end
+
+    if not ttl or ttl <= 0 then
+        return redis.error_reply('Invalid TTL')
+    end
+
+    if count >= limit then
+        return 0
+    end
+end
+
+-- Pass 2: All windows allow the request, so update them.
+for i = 1, windowCount do
+    local ttl = tonumber(ARGV[(i - 1) * 2 + 2])
+    local count = redis.call('INCR', KEYS[i])
+
+    if count == 1 then
+        redis.call('EXPIRE', KEYS[i], ttl)
+    end
+end
+
+return 1
+`;
+async function consumeFixedWindow(windows) {
+  const keys = windows.map((window) => window.redisKey);
+
+  const args = windows.flatMap((window) => [window.limit, window.ttl]);
+
+  return client.eval(FIXED_WINDOW_SCRIPT, keys.length, ...keys, ...args);
 }
+function getSecondsUntilNextMinute(currentTime) {
+  const seconds = currentTime.getUTCSeconds();
+  return 60 - seconds;
+}
+function getSecondsUntilNextDay(currentTime) {
+  const nextDay = new Date(currentTime);
+  nextDay.setUTCHours(24, 0, 0, 0);
+
+  return Math.ceil((nextDay - currentTime) / 1000);
+}
+async function checkAndIncrement(windows) {
+  return consumeFixedWindow(windows);
+}
+
 function buildRateLimitKey(apiKeyId, windowType, windowStart) {
   return `ratelimit:api_key:${apiKeyId}:${windowType}:${windowStart}`;
 }
 
-const date = new Date();
-const windowStart =
-  date.getFullYear() +
-  "-" +
-  String(date.getMonth() + 1).padStart(2, "0") +
-  "-" +
-  String(date.getDate()).padStart(2, "0") +
-  "T" +
-  String(date.getHours()).padStart(2, "0") +
-  ":" +
-  String(date.getMinutes()).padStart(2, "0");
-// (async function () {
-//   const rateLimitKey = buildRateLimitKey(1, "minute", windowStart);
-//   const result = await incrementRequestCount(rateLimitKey);
-//   console.log(result);
-//   const time = await client.ttl(rateLimitKey);
-//   console.log(time);
-//   await client.quit();
-// })();
-function getSecondsUntilNextMinute(currentTime) {
-  const seconds = currentTime.getSeconds();
-  return 60 - seconds;
-}
-async function getCurrentValuOfCounter(redisKey) {
-  return Number(await client.get(redisKey)) || 0;
-}
-// let a = getSecondsUntilNextMinute(date);
-// console.log(a);
-// (async function () {
-//   try {
-//     const redisKey = buildRateLimitKey(1, "minute", windowStart);
-//     console.log("Before increment");
-
-//     const result = await incrementRequestCount(redisKey);
-
-//     console.log("After increment:", result);
-
-//     console.log("Redis Count:", result); // This will now log successfully
-//   } catch (error) {
-//     console.error("Redis Error:", error);
-//   } finally {
-//     // 2. Disconnect so Node can cleanly exit the terminal
-//     await client.quit();
-//   }
-// })();
 module.exports = {
-  incrementRequestCount,
   buildRateLimitKey,
   getSecondsUntilNextMinute,
-  getCurrentValuOfCounter,
+  checkAndIncrement,
+  getSecondsUntilNextDay,
 };
