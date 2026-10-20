@@ -1,4 +1,3 @@
-const pool = require("../config/db");
 async function createDeveloper(db, { name, email, password_hash }) {
   const query = `
     INSERT INTO developers

@@ -5,6 +5,7 @@ const developerController = require("./controllers/developer.controller");
 const protectedRouter = require("./routers/protected.router");
 const authMiddleware = require("./middleware/auth.middleware");
 const { rateLimiter } = require("./middleware/rateLimiter.middleware");
+const requestMetrics = require("./middleware/requestMetrics.middleware");
 
 const app = express();
 
@@ -20,7 +21,13 @@ for (const [route, service] of services) {
   );
 }
 
-app.use("/protected", authMiddleware, rateLimiter, protectedRouter);
+app.use(
+  "/protected",
+  requestMetrics,
+  authMiddleware,
+  rateLimiter,
+  protectedRouter,
+);
 app.post("/register", developerController);
 
 module.exports = app;
