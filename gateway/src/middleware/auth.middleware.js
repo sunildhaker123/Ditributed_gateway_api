@@ -12,7 +12,6 @@ async function authMiddleware(req, res, next) {
       });
     }
     const apiKeyHash = await hashApiKey(apiKeyValue);
-    console.log("Computed hash:", apiKeyHash);
     const apiKeyRecord = await findActiveApiKeyByHash(pool, apiKeyHash);
     if (!apiKeyRecord)
       return res.status(401).json({

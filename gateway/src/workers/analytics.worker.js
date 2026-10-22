@@ -1,12 +1,67 @@
 const { Worker } = require("bullmq");
 const connection = require("../config/redis");
 const pool = require("../config/db");
+const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
+
+class InvalidAnalyticsEventError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "InvalidAnalyticsEventError";
+  }
+}
 const analyticWorker = new Worker(
   "analytics",
   async (job) => {
-    console.log("1. Job received:", job.id);
+    console.log("Job data:", job.data);
+    console.log("Worker file:", __filename);
     const event = job.data;
-    console.log("2. Event data:", event);
+    const errors = [];
+    if (typeof event !== "object" || event === null || Array.isArray(event)) {
+      throw new Error("event must be an object");
+    }
+    if (!Object.hasOwn(event, "apiKeyId")) {
+      errors.push("apiKeyId is required (it can be null)");
+    } else if (
+      event.apiKeyId !== null &&
+      (!Number.isInteger(event.apiKeyId) || event.apiKeyId <= 0)
+    ) {
+      errors.push("apiKeyId must be a positive integer or null");
+    }
+
+    if (
+      typeof event.timestamp !== "string" ||
+      Number.isNaN(Date.parse(event.timestamp))
+    ) {
+      errors.push("timestamp must be a valid date string");
+    }
+
+    if (!METHODS.includes(event.method)) {
+      errors.push(`method must be one of: ${METHODS.join(", ")}`);
+    }
+
+    if (typeof event.path !== "string" || !event.path.startsWith("/")) {
+      errors.push('path must be a string that starts with "/"');
+    }
+    if (
+      !Number.isInteger(event.statusCode) ||
+      event.statusCode < 100 ||
+      event.statusCode > 599
+    ) {
+      errors.push("statusCode must be an integer from 100 to 599");
+    }
+
+    if (
+      typeof event.latencyMs !== "number" ||
+      !Number.isFinite(event.latencyMs) ||
+      event.latencyMs < 0
+    ) {
+      errors.push("latencyMs must be a number >= 0");
+    }
+    if (errors.length > 0) {
+      throw new InvalidAnalyticsEventError(
+        `Invalid analytics event: ${errors.join("; ")}`,
+      );
+    }
     const query = `insert into request_analytics(api_key_id,timestamp,
     method,path,status_code,latency_ms) values($1,$2,$3,$4,$5,$6) returning id;`;
     const result = await pool.query(query, [
@@ -17,8 +72,25 @@ const analyticWorker = new Worker(
       event.statusCode,
       event.latencyMs,
     ]);
-    console.log("3. Database result:", result.rows);
   },
-  { connection },
+  {
+    connection,
+    settings: {
+      backoffStrategy: (attemptsMade, type, err) => {
+        if (err instanceof InvalidAnalyticsEventError) {
+          return -1;
+        }
+
+        return 1000 * 2 ** (attemptsMade - 1);
+      },
+    },
+  },
 );
+analyticWorker.on("completed", (job) => {
+  console.log(`Analytics job ${job.id} completed`);
+});
+
+analyticWorker.on("failed", (job, err) => {
+  console.error(`Analytics job ${job?.id} failed:`, err.message);
+});
 module.exports = analyticWorker;

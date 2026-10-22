@@ -1,47 +1,92 @@
 const requestMetrics = require("../middleware/requestMetrics.middleware");
 const buildRequestEvent = require("../utils/buildRequestEvent");
+const analyticsQueue = require("../config/analyticsQueue");
 
 jest.mock("../utils/buildRequestEvent", () => jest.fn());
 
-describe("requestMetrics middleware", () => {
-  test("builds an analytics event when the response finishes", () => {
-    const req = {
-      method: "GET",
-      path: "/protected",
-      apiKey: { id: 7 },
-    };
+jest.mock("../config/analyticsQueue", () => ({
+  add: jest.fn().mockResolvedValue({ id: "test-job" }),
+}));
 
+describe("requestMetrics validation", () => {
+  test("does not enqueue an event with an invalid status code", async () => {
+    // Arrange: make the event invalid
+    buildRequestEvent.mockReturnValue({
+      apiKeyId: 2,
+      timestamp: new Date().toISOString(),
+      method: "GET",
+      path: "/",
+      statusCode: 99,
+      latencyMs: 10,
+    });
+
+    const req = { method: "GET", path: "/" };
+
+    // Capture the finish callback registered by the middleware
+    let finishCallback;
     const res = {
       statusCode: 200,
-      on: jest.fn(),
+      on: jest.fn((eventName, callback) => {
+        if (eventName === "finish") {
+          finishCallback = callback;
+        }
+      }),
     };
 
     const next = jest.fn();
 
-    buildRequestEvent.mockReturnValue({
-      apiKeyId: 7,
-      statusCode: 200,
-    });
+    // Act: register the middleware callback
+    requestMetrics(req, res, next);
+
+    // Simulate Express finishing the response
+    await finishCallback();
+
+    // Assert
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(analyticsQueue.add).not.toHaveBeenCalled();
+  });
+
+  test("enqueues a valid event when apiKeyId is null", async () => {
+    jest.clearAllMocks();
+
+    const event = {
+      apiKeyId: null,
+      timestamp: new Date().toISOString(),
+      method: "GET",
+      path: "/",
+      statusCode: 401,
+      latencyMs: 5,
+    };
+
+    buildRequestEvent.mockReturnValue(event);
+
+    let finishCallback;
+
+    const req = { method: "GET", path: "/" };
+
+    const res = {
+      statusCode: 401,
+      on: jest.fn((eventName, callback) => {
+        if (eventName === "finish") {
+          finishCallback = callback;
+        }
+      }),
+    };
+
+    const next = jest.fn();
 
     requestMetrics(req, res, next);
 
-    // The middleware should continue the request pipeline.
+    await finishCallback();
+
     expect(next).toHaveBeenCalledTimes(1);
 
-    // Capture the callback registered for the response's finish event.
-    const finishCallback = res.on.mock.calls[0][1];
-
-    expect(res.on).toHaveBeenCalledWith("finish", expect.any(Function));
-
-    // Simulate the response finishing.
-    finishCallback();
-
-    // Verify that the event builder received the expected arguments.
-    expect(buildRequestEvent).toHaveBeenCalledWith(
-      req,
-      res,
-      expect.any(Number),
-      expect.any(Number),
-    );
+    expect(analyticsQueue.add).toHaveBeenCalledWith("request-event", event, {
+      attempts: 3,
+      backoff: {
+        type: "exponential",
+        delay: 1000,
+      },
+    });
   });
 });
