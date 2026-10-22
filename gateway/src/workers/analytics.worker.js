@@ -1,14 +1,8 @@
-const { Worker } = require("bullmq");
+const { Worker, UnrecoverableError } = require("bullmq");
 const connection = require("../config/redis");
 const pool = require("../config/db");
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 
-class InvalidAnalyticsEventError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "InvalidAnalyticsEventError";
-  }
-}
 const analyticWorker = new Worker(
   "analytics",
   async (job) => {
@@ -58,7 +52,7 @@ const analyticWorker = new Worker(
       errors.push("latencyMs must be a number >= 0");
     }
     if (errors.length > 0) {
-      throw new InvalidAnalyticsEventError(
+      throw new UnrecoverableError(
         `Invalid analytics event: ${errors.join("; ")}`,
       );
     }
@@ -75,15 +69,6 @@ const analyticWorker = new Worker(
   },
   {
     connection,
-    settings: {
-      backoffStrategy: (attemptsMade, type, err) => {
-        if (err instanceof InvalidAnalyticsEventError) {
-          return -1;
-        }
-
-        return 1000 * 2 ** (attemptsMade - 1);
-      },
-    },
   },
 );
 analyticWorker.on("completed", (job) => {
