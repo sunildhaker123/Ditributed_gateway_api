@@ -6,6 +6,7 @@ const protectedRouter = require("./routers/protected.router");
 const authMiddleware = require("./middleware/auth.middleware");
 const { rateLimiter } = require("./middleware/rateLimiter.middleware");
 const requestMetrics = require("./middleware/requestMetrics.middleware");
+const { analyticsRouter } = require("./routers/analytics.router");
 
 const app = express();
 
@@ -28,6 +29,7 @@ app.use(
   rateLimiter,
   protectedRouter,
 );
+app.use("/summary", analyticsRouter);
 app.post("/register", developerController);
 
 module.exports = app;
