@@ -1,8 +1,34 @@
 const pool = require("../config/db");
 
-async function getTotalRequests() {
-  const query = `select count(*) as total_requests from request_analytics`;
-  const result = await pool.query(query);
-  return result.rows[0].total_requests;
+async function getTotalRequests(from, to) {
+  let query = `
+    SELECT
+      COUNT(*) AS total_requests,
+      AVG(latency_ms) AS average_latency_ms,
+      COUNT(*) FILTER (
+        WHERE status_code >= 200 AND status_code < 300
+      ) AS success_requests,
+      COUNT(*) FILTER (
+        WHERE status_code >= 300 AND status_code < 400
+      ) AS redirect_requests,
+      COUNT(*) FILTER (
+        WHERE status_code >= 400 AND status_code < 500
+      ) AS client_errors,
+      COUNT(*) FILTER (
+        WHERE status_code >= 500
+      ) AS server_errors
+    FROM request_analytics
+  `;
+
+  const values = [];
+
+  if (from && to) {
+    query += ` WHERE timestamp >= $1 AND timestamp < $2`;
+    values.push(from, to);
+  }
+
+  const result = await pool.query(query, values);
+  return result.rows[0];
 }
+
 module.exports = { getTotalRequests };

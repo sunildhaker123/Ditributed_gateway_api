@@ -1,5 +1,5 @@
 const { getTotalRequests } = require("../repositories/analytics.repository");
-async function getAnalyticsSummary() {
-  return await getTotalRequests();
+async function getAnalyticsSummary(from, to) {
+  return getTotalRequests(from, to);
 }
 module.exports = { getAnalyticsSummary };
