@@ -29,7 +29,7 @@ app.use(
   rateLimiter,
   protectedRouter,
 );
-app.use("/summary", analyticsRouter);
+app.use("/analytics/summary", analyticsRouter);
 app.post("/register", developerController);
 
 module.exports = app;

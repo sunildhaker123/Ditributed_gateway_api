@@ -23,7 +23,7 @@ async function getTotalRequests(from, to) {
   const values = [];
 
   if (from && to) {
-    query += ` WHERE timestamp >= $1 AND timestamp < $2`;
+    query += `WHERE timestamp >= $1 AND timestamp < $2`;
     values.push(from, to);
   }
 
