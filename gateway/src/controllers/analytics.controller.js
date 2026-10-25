@@ -44,6 +44,9 @@ async function analyticsSummaryController(req, res, next) {
     return res.status(200).json({
       totalRequests: result.total_requests,
       averageLatencyMs: result.average_latency_ms,
+      p50LatencyMs: result.p50_latency_ms,
+      p95LatencyMs: result.p95_latency_ms,
+      p99LatencyMs: result.p99_latency_ms,
       successRequests: result.success_requests,
       redirectRequests: result.redirect_requests,
       serverErrors: result.server_errors,

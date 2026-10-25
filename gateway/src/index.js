@@ -1,8 +1,13 @@
 const app = require("./app");
 const checkServices = require("./utils/healthChecker");
-
+const eventLoopMonitor = require("./utils/eventLoopMonitor");
 setInterval(() => {
   checkServices();
+  console.log(
+    "Event loop p99 delay:",
+    (eventLoopMonitor.percentile(99) / 1e6).toFixed(2),
+    "ms",
+  );
 }, 10000);
 
 app.listen(4000, () => {
