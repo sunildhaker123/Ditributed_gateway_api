@@ -7,7 +7,7 @@ const analyticWorker = new Worker(
   "analytics",
   async (job) => {
     console.log("Job data:", job.data);
-    console.log("Worker file:", __filename);
+    // console.log("Worker file:", __filename);
     const event = job.data;
     const errors = [];
     if (typeof event !== "object" || event === null || Array.isArray(event)) {
@@ -56,9 +56,16 @@ const analyticWorker = new Worker(
         `Invalid analytics event: ${errors.join("; ")}`,
       );
     }
+    // async function foo() {
+    //   await new Promise((resolve) => {
+    //     setTimeout(resolve, 10000);
+    //   });
+    // }
+    // await foo();
     const query = `insert into request_analytics(api_key_id,timestamp,
     method,path,status_code,latency_ms) values($1,$2,$3,$4,$5,$6) returning id;`;
-    const result = await pool.query(query, [
+
+    await pool.query(query, [
       event.apiKeyId,
       event.timestamp,
       event.method,

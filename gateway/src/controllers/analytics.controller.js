@@ -51,6 +51,7 @@ async function analyticsSummaryController(req, res, next) {
       redirectRequests: result.redirect_requests,
       serverErrors: result.server_errors,
       clientErrors: result.client_errors,
+      rateLimitErrors: result.rate_limit_errors,
     });
   } catch (err) {
     next(err);

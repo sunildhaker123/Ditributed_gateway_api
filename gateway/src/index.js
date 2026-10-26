@@ -1,6 +1,7 @@
 const app = require("./app");
 const checkServices = require("./utils/healthChecker");
 const eventLoopMonitor = require("./utils/eventLoopMonitor");
+const analyticsQueueMonitor = require("./utils/analyticsQueueMonitor");
 setInterval(() => {
   checkServices();
   console.log(
@@ -8,6 +9,7 @@ setInterval(() => {
     (eventLoopMonitor.percentile(99) / 1e6).toFixed(2),
     "ms",
   );
+  analyticsQueueMonitor();
 }, 10000);
 
 app.listen(4000, () => {

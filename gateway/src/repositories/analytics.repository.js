@@ -24,7 +24,9 @@ PERCENTILE_CONT(0.99) WITHIN GROUP (
       ) AS redirect_requests,
       COUNT(*) FILTER (
         WHERE status_code >= 400 AND status_code < 500
-      ) AS client_errors,
+      and status_code != 429) AS client_errors,
+       COUNT(*) FILTER (
+        WHERE status_code = 429) AS rate_limit_errors,
       COUNT(*) FILTER (
         WHERE status_code >= 500
       ) AS server_errors
