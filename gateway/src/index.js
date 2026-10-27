@@ -2,6 +2,9 @@ const app = require("./app");
 const checkServices = require("./utils/healthChecker");
 const eventLoopMonitor = require("./utils/eventLoopMonitor");
 const analyticsQueueMonitor = require("./utils/analyticsQueueMonitor");
+const redis = require("./config/redis");
+const pool = require("./config/db");
+
 const monitorInterval = setInterval(() => {
   checkServices();
   console.log(
@@ -27,11 +30,15 @@ const shutdown = () => {
     try {
       await redis.quit();
       console.log("Redis connection closed");
+    } catch (err) {
+      console.error("Redis cleanup failed:", err.message);
+    }
 
+    try {
       await pool.end();
       console.log("PostgreSQL pool closed");
     } catch (err) {
-      console.error("Error during cleanup:", err.message);
+      console.error("PostgreSQL cleanup failed:", err.message);
     }
   });
 };

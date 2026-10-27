@@ -3,7 +3,10 @@ const connection = require("../config/redis");
 const pool = require("../config/db");
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 const { performance } = require("node:perf_hooks");
-
+// console.log({
+//   pid: process.pid,
+//   ppid: process.ppid,
+// });
 const analyticWorker = new Worker(
   "analytics",
   async (job) => {
@@ -75,15 +78,53 @@ const analyticWorker = new Worker(
       event.statusCode,
       event.latencyMs,
     ]);
-    console.log("Time to complete job :", performance.now() - startTime, "ms");
+    console.log(
+      "Time to complete job :",
+      job.id,
+      performance.now() - startTime,
+      "ms",
+    );
   },
   {
     connection,
   },
 );
-// analyticWorker.on("completed", (job) => {
-//   console.log(`Analytics job ${job.id} completed`);
-// });
+let isShuttingDown = false;
+const shutdown = async () => {
+  if (isShuttingDown) {
+    console.log("Shutdown already in progress; ignoring signal");
+    return;
+  }
+
+  isShuttingDown = true;
+  console.log("Worker shutdown requested");
+  try {
+    await analyticWorker.close();
+    console.log("Worker closed");
+  } catch (err) {
+    console.error("Worker cleanup failed:", err.message);
+  }
+
+  try {
+    await connection.quit();
+    console.log("Redis connection closed");
+  } catch (err) {
+    console.error("Redis cleanup failed:", err.message);
+  }
+
+  try {
+    await pool.end();
+    console.log("PostgreSQL pool closed");
+  } catch (err) {
+    console.error("PostgreSQL cleanup failed:", err.message);
+  }
+};
+process.on("SIGINT", shutdown);
+
+process.on("SIGTERM", shutdown);
+analyticWorker.on("completed", (job) => {
+  console.log(`Analytics job ${job.id} completed`);
+});
 
 analyticWorker.on("failed", (job, err) => {
   console.error(`Analytics job ${job?.id} failed:`, err.message);
