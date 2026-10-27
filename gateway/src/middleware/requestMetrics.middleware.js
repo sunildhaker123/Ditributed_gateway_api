@@ -63,6 +63,9 @@ function requestMetrics(req, res, next) {
           type: "exponential",
           delay: 1000,
         },
+        removeOnFail: {
+          count: 500,
+        },
       });
     } catch (err) {
       console.error("Failed to enqueue request analytics:", err.message);

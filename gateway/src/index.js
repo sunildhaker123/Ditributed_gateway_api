@@ -2,7 +2,7 @@ const app = require("./app");
 const checkServices = require("./utils/healthChecker");
 const eventLoopMonitor = require("./utils/eventLoopMonitor");
 const analyticsQueueMonitor = require("./utils/analyticsQueueMonitor");
-setInterval(() => {
+const monitorInterval = setInterval(() => {
   checkServices();
   console.log(
     "Event loop p99 delay:",
@@ -12,6 +12,29 @@ setInterval(() => {
   analyticsQueueMonitor();
 }, 10000);
 
-app.listen(4000, () => {
+const server = app.listen(4000, () => {
   console.log("Gateway is running at http://localhost:4000");
 });
+
+// graceful shutdown and it is very inportant
+const shutdown = () => {
+  console.log("Shutdown requested");
+
+  clearInterval(monitorInterval);
+
+  server.close(async () => {
+    console.log("HTTP server closed");
+    try {
+      await redis.quit();
+      console.log("Redis connection closed");
+
+      await pool.end();
+      console.log("PostgreSQL pool closed");
+    } catch (err) {
+      console.error("Error during cleanup:", err.message);
+    }
+  });
+};
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

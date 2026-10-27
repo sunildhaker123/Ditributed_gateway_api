@@ -2,13 +2,15 @@ const { Worker, UnrecoverableError } = require("bullmq");
 const connection = require("../config/redis");
 const pool = require("../config/db");
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
+const { performance } = require("node:perf_hooks");
 
 const analyticWorker = new Worker(
   "analytics",
   async (job) => {
-    console.log("Job data:", job.data);
+    // console.log("Job data:", job.data);
     // console.log("Worker file:", __filename);
     const event = job.data;
+    const startTime = performance.now();
     const errors = [];
     if (typeof event !== "object" || event === null || Array.isArray(event)) {
       throw new Error("event must be an object");
@@ -73,14 +75,15 @@ const analyticWorker = new Worker(
       event.statusCode,
       event.latencyMs,
     ]);
+    console.log("Time to complete job :", performance.now() - startTime, "ms");
   },
   {
     connection,
   },
 );
-analyticWorker.on("completed", (job) => {
-  console.log(`Analytics job ${job.id} completed`);
-});
+// analyticWorker.on("completed", (job) => {
+//   console.log(`Analytics job ${job.id} completed`);
+// });
 
 analyticWorker.on("failed", (job, err) => {
   console.error(`Analytics job ${job?.id} failed:`, err.message);
