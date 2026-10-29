@@ -1,4 +1,5 @@
 const client = require("../config/redis");
+const ServiceUnavailableError = require("../utils/ServiceUnavailableError");
 const FIXED_WINDOW_SCRIPT = `
   local windowCount = #KEYS
 
@@ -37,8 +38,22 @@ async function consumeFixedWindow(windows) {
   const keys = windows.map((window) => window.redisKey);
 
   const args = windows.flatMap((window) => [window.limit, window.ttl]);
-
-  return client.eval(FIXED_WINDOW_SCRIPT, keys.length, ...keys, ...args);
+  const timeout = new Promise((_, reject) => {
+    setTimeout(
+      () =>
+        reject(
+          new ServiceUnavailableError("Redis rate-limit operation timed out"),
+        ),
+      3000,
+    );
+  });
+  const result = client.eval(
+    FIXED_WINDOW_SCRIPT,
+    keys.length,
+    ...keys,
+    ...args,
+  );
+  return Promise.race([result, timeout]);
 }
 function getSecondsUntilNextMinute(currentTime) {
   const seconds = currentTime.getUTCSeconds();

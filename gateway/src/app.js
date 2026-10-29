@@ -7,6 +7,7 @@ const authMiddleware = require("./middleware/auth.middleware");
 const { rateLimiter } = require("./middleware/rateLimiter.middleware");
 const requestMetrics = require("./middleware/requestMetrics.middleware");
 const { analyticsRouter } = require("./routers/analytics.router");
+const errorHandler = require("./middleware/errorHandler.middleware");
 
 const app = express();
 
@@ -31,5 +32,7 @@ app.use(
 );
 app.use("/analytics/summary", analyticsRouter);
 app.post("/register", developerController);
+
+app.use(errorHandler);
 
 module.exports = app;

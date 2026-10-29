@@ -1,5 +1,5 @@
 const { Queue } = require("bullmq");
-const connection = require("./redis");
-const analytics = new Queue("analytics", { connection });
+const rateLimitRedis = require("./rateLimitRedis");
+const analytics = new Queue("analytics", { rateLimitRedis });
 
 module.exports = analytics;

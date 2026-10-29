@@ -5,6 +5,7 @@ const {
   getSecondsUntilNextDay,
 } = require("../services/rateLimitCounter.service");
 const { getRateLimits } = require("../services/rateLimit.service");
+const ServiceUnavailableError = require("../utils/ServiceUnavailableError");
 
 const rateLimiter = async (req, res, next) => {
   const apiKeyRecord = req.apiKey;
@@ -49,13 +50,13 @@ const rateLimiter = async (req, res, next) => {
         ttl,
       };
     });
-    if (windows.length === 0) {
-      return res.status(503).json({
-        error: "Service Unavailable",
-        message: "Rate limits are not configured for this plan",
-      });
+    let currCountVal;
+
+    try {
+      currCountVal = await checkAndIncrement(windows);
+    } catch (err) {
+      throw new ServiceUnavailableError("Rate limiting service is unavailable");
     }
-    const currCountVal = await checkAndIncrement(windows);
     if (currCountVal === 0) {
       return res.status(429).json({
         error: "Too many requests",
